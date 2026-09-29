@@ -6,6 +6,10 @@ from ultralytics import YOLO
 from custom_markers import draw_annotations, jersey_colors, draw_possession
 from team_tracker import TeamTracker
 from possession_tracker import PossessionTracker
+from speed_tracker import SpeedTracker, draw_speed
+from id_tracker import IdTracker
+
+SPEED_BALL, SPEED_REF = False, False
 
 
 if torch.cuda.is_available():
@@ -111,6 +115,7 @@ print(f"Conf   : {a.conf}")
 print(f"Stride : {a.vid_stride}")
 
 tracker, pos_tracker = TeamTracker(), PossessionTracker()
+spd_tracker, id_tracker = SpeedTracker(fps=fps), IdTracker()
 
 writer = None
 frames = 0
@@ -159,8 +164,17 @@ with torch.inference_mode():
             ball = next((x for x, cid in zip(b, c) if 'ball' in names[int(cid)].lower()), None)
             pos_tracker.update(ball, b, team_ids)
 
+            is_player = [(SPEED_BALL if ('ball' in (lbl := names[int(cid)].lower()) or 'football' in lbl)
+                          else SPEED_REF if 'referee' in lbl
+                          else team_ids[i] >= 0)
+                          for i, cid in enumerate(c)]
+
+            ids = id_tracker.update(b, is_player)
+            speeds = spd_tracker.update(img, b, ids)
+
             draw_annotations(img, b, c, names, team_ids, team_colors)
             draw_possession(img, pos_tracker.percentages(), team_colors)
+            draw_speed(img, b, speeds, team_ids, team_colors)
 
         if is_img:
 
